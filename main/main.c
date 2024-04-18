@@ -1,15 +1,15 @@
 /*
  * LED blink with FreeRTOS
  */
+#include "hardware/adc.h"
 #include <FreeRTOS.h>
+#include <math.h>
 #include <queue.h>
 #include <semphr.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <task.h>
-#include "hardware/adc.h"
-#include <math.h>
-#include <stdlib.h>
 
 #include "hc06.h"
 #include "pico/stdlib.h"
@@ -29,10 +29,10 @@ MJS Y  - 9 */
 /* ------------------------------ Constants ------------------------------ */
 #define DEBOUNCE_TIME 200
 
-#define GAME_BTN_B_PIN 2
-#define GAME_BTN_Y_PIN 3
-#define GAME_BTN_X_PIN 4
-#define GAME_BTN_A_PIN 5
+#define GAME_BTN_B_PIN 10
+#define GAME_BTN_Y_PIN 11
+#define GAME_BTN_X_PIN 12
+#define GAME_BTN_A_PIN 13
 
 #define DEAD_ZONE 180
 
@@ -69,13 +69,13 @@ void write_package(adc_t data) {
     int msb = val >> 8;
     int lsb = val & 0xFF;
 
-    if (data.axis < 4) {
-        printf("\nHuman readable: %d %d \n", data.axis, data.val);
-    }
+    // if (data.axis < 4) {
+    //     printf("\nHuman readable: %d %d \n", data.axis, data.val);
+    // }
 
-    if (data.axis == 6 || data.axis == 7) {
-        printf("\nHuman readable: %d %d \n", data.axis, data.val);
-    }
+    // if (data.axis == 6 || data.axis == 7) {
+    //     printf("\nHuman readable: %d %d \n", data.axis, data.val);
+    // }
 
     // uart_putc_raw(uart0, data.axis);
     // uart_putc_raw(uart0, msb);
@@ -87,7 +87,7 @@ void write_package(adc_t data) {
 void game_btn_callback(uint gpio, uint32_t events) {
     uint pressed = 0;
 
-    if (events == 0x4) {  // fall edge
+    if (events == 0x4) { // fall edge
         if (gpio == GAME_BTN_B_PIN)
             pressed = 0;
         else if (gpio == GAME_BTN_Y_PIN)
@@ -103,13 +103,14 @@ void game_btn_callback(uint gpio, uint32_t events) {
 
 /* ------------------------------ Tasks ------------------------------ */
 void hc06_task(void *p) {
+    printf("HC06 Task\n");
     uart_init(HC06_UART_ID, HC06_BAUD_RATE);
     gpio_set_function(HC06_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(HC06_RX_PIN, GPIO_FUNC_UART);
     hc06_init("bruno-stanz", "1234");
 
     while (true) {
-        uart_puts(HC06_UART_ID, "OLAAA ");
+        uart_puts(HC06_UART_ID, "flamengo ");
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
@@ -183,39 +184,51 @@ void game_btn_task(void *p) {
 }
 
 void x_task(void *p) {
+    adc_init();
     adc_gpio_init(26);
+    adc_set_round_robin(0b00011);
+
     adc_t data;
-    data.axis = 6;
 
     while (1) {
-        int val = adc_read();
-        int mapped_val   = (data.val - 2047) * 255 / 2047;
-        data.val = (int) mapped_val * 0.5;
+        data.axis = 6;
+        data.val = adc_read();
+
+        int mapped_val = (data.val - 2047) * 255 / 2047;
+        data.val = (int)(mapped_val);
+
         xQueueSend(xQueueJoyStick, &data, portMAX_DELAY);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
 void y_task(void *p) {
+    adc_init();
     adc_gpio_init(27);
+    adc_set_round_robin(0b00011);
+
     adc_t data;
-    data.axis = 7;
 
     while (1) {
-        int val = adc_read();
-        int mapped_val   = (data.val - 2047) * 255 / 2047;
-        data.val = (int) mapped_val * 0.5;
+        data.axis = 7;
+        data.val = adc_read();
+
+        int mapped_val = (data.val - 2047) * 255 / 2047;
+        data.val = (int)(mapped_val);
+
         xQueueSend(xQueueJoyStick, &data, portMAX_DELAY);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
-
 
 void joystick_task(void *p) {
     adc_t data;
 
     while (1) {
         if (xQueueReceive(xQueueJoyStick, &data, portMAX_DELAY)) {
+            if (data.val > -30 && data.val < 30) {
+                data.val = 0;
+            }
             write_package(data);
         }
     }
@@ -241,10 +254,11 @@ int main() {
 
     // Tasks
     xTaskCreate(game_btn_task, "GameButton Task", 4096, NULL, 1, NULL);
-    xTaskCreate(joystick_task, "JoyStick Task",   4096, NULL, 1, NULL);
-    xTaskCreate(x_task,    "x_task",    4096, NULL, 1, NULL);
-    xTaskCreate(y_task,    "y_task",    4096, NULL, 1, NULL);
+    xTaskCreate(joystick_task, "JoyStick Task", 4096, NULL, 1, NULL);
+    xTaskCreate(x_task, "x_task", 4096, NULL, 1, NULL);
+    xTaskCreate(y_task, "y_task", 4096, NULL, 1, NULL);
 
     vTaskStartScheduler();
-    while (true);
+    while (true)
+        ;
 }
