@@ -1,39 +1,68 @@
 import pyvjoy
-import time
+import serial
 
 
-def process_input(idx, value):
-    # initialize the vJoy device
-    j = pyvjoy.VJoyDevice(1)
+class VJoyController:
+    def __init__(self, device_id=1):
+        self.joystick = pyvjoy.VJoyDevice(device_id)
+        self.mapping = {
+            'B': ('button', 0),
+            'Y': ('button', 1),
+            'X': ('button', 2),
+            'A': ('button', 3),
+            'TR': ('button', 4),  # right trigger
+            'TL': ('button', 5),  # left trigger
+            'CJX': ('axis', pyvjoy.HID_USAGE_RX),  # camera stick x
+            'CJY': ('axis', pyvjoy.HID_USAGE_RY),  # camera stick y
+            'MJX': ('axis', pyvjoy.HID_USAGE_X),  # movement stick x
+            'MJY': ('axis', pyvjoy.HID_USAGE_Y)  # movement stick y
+        }
 
-    if idx <= 3:  # button index is from 0 to 3
-        j.set_button(idx + 1, value != 0)
-    elif idx == 4:  # x axis of the joystick
-        j.set_axis(pyvjoy.HID_USAGE_X, int(value * 32767 / 1000 + 32768))
-    elif idx == 5:  # y axis of the joystick
-        j.set_axis(pyvjoy.HID_USAGE_Y, int(value * 32767 / 1000 + 32768))
+    def process_input(self, axis, value):
+        action_type, action_index = self.mapping[axis]
+        if action_type == 'button':
+            self.joystick.set_button(action_index + 1, value != 0)
+        elif action_type == 'axis':
+            scaled_value = int(value * 32767 / 1000 + 32768)
+            self.joystick.set_axis(action_index, scaled_value)
+
+
+class BluetoothReceiver:
+    def __init__(self, com_port='COM3', baud_rate=9600):
+        self.serial = serial.Serial(com_port, baud_rate)
+
+    def read_data(self):
+        while True:
+            data = self.serial.read(1)
+            if data == b'\xFF':
+                break
+        return self.serial.read(3)
+
+
+def parse_data(data):
+    axis = data[0]
+    value = int.from_bytes(data[1:3], byteorder='little', signed=True)
+    print("received data: ", axis, value)
+    return axis, value
 
 
 def main():
-    simulated_data = [
-        (0, 1),   # button 1 pressed
-        (0, 0),   # button 1 released (
-        (1, 1),   # button 2 pressed
-        (1, 0),   # button 2 released
-        (2, 1),   # button 3 pressed
-        (2, 0),   # button 3 released
-        (3, 1),   # button 4 pressed
-        (4, 500),  # joystick x axis at 500
-        (4, -500),  # joystick x axis at -500
-        (5, 500),  # joystick y axis at 500
-        (5, -500)  # joystick y axis at -500
-    ]
+    receiver = BluetoothReceiver()
+    controller = VJoyController()
 
-    while True:
-        for idx, value in simulated_data:
-            process_input(idx, value)
-            time.sleep(0.1)
-            print("simulated data sent to vJoy device")
+    try:
+        while True:
+            print("waiting for controller input...")
+            data = receiver.read_data()
+            axis, value = parse_data(data)
+            controller.process_input(axis, value)
+
+    except KeyboardInterrupt:
+        print("program terminated by user. exiting...")
+    except Exception as e:
+        print("error occurred: ", e)
+    finally:
+        receiver.serial.close()
 
 
 if __name__ == "__main__":
