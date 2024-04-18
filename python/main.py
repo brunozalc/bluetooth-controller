@@ -6,21 +6,27 @@ class VJoyController:
     def __init__(self, device_id=1):
         self.gamepad = pyvjoy.VJoyDevice(device_id)
         self.mapping = {
-            'B': ('button', 0),
-            'Y': ('button', 1),
-            'X': ('button', 2),
-            'A': ('button', 3),
-            'TR': ('button', 4),  # right trigger
-            'TL': ('button', 5),  # left trigger
-            'CJX': ('axis', pyvjoy.HID_USAGE_RX),  # camera stick x
-            'CJY': ('axis', pyvjoy.HID_USAGE_RY),  # camera stick y
-            'MJX': ('axis', pyvjoy.HID_USAGE_X),  # movement stick x
-            'MJY': ('axis', pyvjoy.HID_USAGE_Y)  # movement stick y
+            0: ('button', 0),  # B
+            1: ('button', 1),  # Y
+            2: ('button', 2),  # X
+            3: ('button', 3),  # A
+            4: ('button', 4),  # TR (right trigger)
+            5: ('button', 5),  # TL (left trigger)
+            6: ('axis', pyvjoy.HID_USAGE_RX),  # CJX (right stick x-axis)
+            7: ('axis', pyvjoy.HID_USAGE_RY),  # CJY  (right stick y-axis)
+            8: ('axis', pyvjoy.HID_USAGE_X),  # MJX (left stick x-axis)
+            9: ('axis', pyvjoy.HID_USAGE_Y)   # MJY (left stick y-axis)
         }
 
-    def process_input(self, axis, value):
-        action_type, action_index = self.mapping[axis]
+    def process_input(self, idx, value):
+        if idx not in self.mapping:
+            raise ValueError("invalid control index")
+
+        action_type, action_index = self.mapping[idx]
+
         if action_type == 'button':
+            if value not in [0, 1]:
+                raise ValueError("button value must be 0 or 1")
             self.gamepad.set_button(action_index + 1, value != 0)
         elif action_type == 'axis':
             scaled_value = int(value * 32767 / 1000 + 32768)
@@ -32,18 +38,17 @@ class BluetoothReceiver:
         self.serial = serial.Serial(com_port, baud_rate)
 
     def read_data(self):
-        while True:
-            data = self.serial.read(1)
-            if data == b'\xFF':
-                break
-        return self.serial.read(3)
+        data = self.serial.read(4)
+        if data[-1] != 255:
+            raise ValueError("invalid packet end")
+        return data[:3]
 
 
 def parse_data(data):
-    axis = data[0]
+    idx = data[0]
     value = int.from_bytes(data[1:3], byteorder='little', signed=True)
-    print("received data: ", axis, value)
-    return axis, value
+    print("received data: IDX={}, VALUE={}".format(idx, value))
+    return idx, value
 
 
 def main():
@@ -54,8 +59,8 @@ def main():
         while True:
             print("waiting for controller input...")
             data = receiver.read_data()
-            axis, value = parse_data(data)
-            controller.process_input(axis, value)
+            idx, value = parse_data(data)
+            controller.process_input(idx, value)
 
     except KeyboardInterrupt:
         print("program terminated by user. exiting...")
