@@ -43,44 +43,36 @@ typedef struct adc {
 } adc_t;
 
 /* ------------------------------ Global variables ------------------------------ */
-QueueHandle_t xQueueGameButton, xQueueJoyStick;
+QueueHandle_t xQueueGameButton, xQueueJoyStick, xQueueBluetooth;
 
 /* ------------------------------ Utilities ------------------------------ */
 bool has_debounced(uint32_t current_trigger, uint32_t last_trigger) {
     return current_trigger - last_trigger > DEBOUNCE_TIME;
 }
 
-int read_and_filter_adc(int axis) {
-    adc_select_input(axis);
-    int raw = adc_read();
-    printf("\nrax axis (%d): %d\n", axis, raw);
+// int read_and_filter_adc(int axis) {
+//     adc_select_input(axis);
+//     int raw = adc_read();
+//     printf("\nrax axis (%d): %d\n", axis, raw);
 
-    int scaled_val = ((raw - 2047) / 8);
+//     int scaled_val = ((raw - 2047) / 8);
 
-    if (abs(scaled_val) < DEAD_ZONE) {
-        scaled_val = 0; // Apply deadzone
-    }
+//     if (abs(scaled_val) < DEAD_ZONE) {
+//         scaled_val = 0; // Apply deadzone
+//     }
 
-    return scaled_val;
-}
+//     return scaled_val;
+// }
 
 void write_package(adc_t data) {
     int val = data.val;
     int msb = val >> 8;
     int lsb = val & 0xFF;
 
-    // if (data.axis < 4) {
-    //     printf("\nHuman readable: %d %d \n", data.axis, data.val);
-    // }
-
-    // if (data.axis == 6 || data.axis == 7) {
-    //     printf("\nHuman readable: %d %d \n", data.axis, data.val);
-    // }
-
-    // uart_putc_raw(uart0, data.axis);
-    // uart_putc_raw(uart0, msb);
-    // uart_putc_raw(uart0, lsb);
-    // uart_putc_raw(uart0, -1);
+    uart_putc_raw(HC06_UART_ID, data.axis);
+    uart_putc_raw(HC06_UART_ID, msb);
+    uart_putc_raw(HC06_UART_ID, lsb);
+    uart_putc_raw(HC06_UART_ID, -1);
 }
 
 /* ------------------------------ Callbacks ------------------------------ */
@@ -109,9 +101,12 @@ void hc06_task(void *p) {
     gpio_set_function(HC06_RX_PIN, GPIO_FUNC_UART);
     hc06_init("bruno-stanz", "1234");
 
-    while (true) {
-        uart_puts(HC06_UART_ID, "flamengo ");
-        vTaskDelay(pdMS_TO_TICKS(100));
+    adc_t data;
+
+    while (1) {
+        if (xQueueReceive(xQueueBluetooth, &data, portMAX_DELAY)) {
+            write_package(data);
+        }
     }
 }
 
@@ -198,7 +193,7 @@ void x_task(void *p) {
         data.val = (int)(mapped_val);
 
         xQueueSend(xQueueJoyStick, &data, portMAX_DELAY);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -217,7 +212,7 @@ void y_task(void *p) {
         data.val = (int)(mapped_val);
 
         xQueueSend(xQueueJoyStick, &data, portMAX_DELAY);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -229,7 +224,7 @@ void joystick_task(void *p) {
             if (data.val > -30 && data.val < 30) {
                 data.val = 0;
             }
-            write_package(data);
+            xQueueSend(xQueueBluetooth, &data, portMAX_DELAY);
         }
     }
 }
@@ -252,7 +247,13 @@ int main() {
         printf("Falha em criar a fila xQueueJoyStick... \n");
     }
 
+    xQueueBluetooth = xQueueCreate(32, sizeof(adc_t));
+    if (xQueueBluetooth == NULL) {
+        printf("Falha em criar a fila xQueueBluetooth... \n");
+    }
+
     // Tasks
+    xTaskCreate(hc06_task, "HC06 Task", 4096, NULL, 1, NULL);
     xTaskCreate(game_btn_task, "GameButton Task", 4096, NULL, 1, NULL);
     xTaskCreate(joystick_task, "JoyStick Task", 4096, NULL, 1, NULL);
     xTaskCreate(x_task, "x_task", 4096, NULL, 1, NULL);
