@@ -4,7 +4,7 @@ import serial
 
 class VJoyController:
     def __init__(self, device_id=1):
-        self.joystick = pyvjoy.VJoyDevice(device_id)
+        self.gamepad = pyvjoy.VJoyDevice(device_id)
         self.mapping = {
             'B': ('button', 0),
             'Y': ('button', 1),
@@ -21,10 +21,10 @@ class VJoyController:
     def process_input(self, axis, value):
         action_type, action_index = self.mapping[axis]
         if action_type == 'button':
-            self.joystick.set_button(action_index + 1, value != 0)
+            self.gamepad.set_button(action_index + 1, value != 0)
         elif action_type == 'axis':
             scaled_value = int(value * 32767 / 1000 + 32768)
-            self.joystick.set_axis(action_index, scaled_value)
+            self.gamepad.set_axis(action_index, scaled_value)
 
 
 class BluetoothReceiver:
