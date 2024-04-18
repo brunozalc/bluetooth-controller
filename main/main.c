@@ -24,9 +24,7 @@ TL     - 5
 CJS X  - 6
 CJS Y  - 7
 MJS X  - 8
-MJS Y  - 9
-
-*/
+MJS Y  - 9 */
 
 /* ------------------------------ Constants ------------------------------ */
 #define DEBOUNCE_TIME 200
@@ -38,8 +36,7 @@ MJS Y  - 9
 
 #define DEAD_ZONE 180
 
-/* ------------------------------ Data structures ------------------------------
- */
+/* ------------------------------ Data structures ------------------------------ */
 typedef struct adc {
     int axis;
     int val;
@@ -54,9 +51,9 @@ bool has_debounced(uint32_t current_trigger, uint32_t last_trigger) {
 }
 
 int read_and_filter_adc(int axis) {
-    printf("rf...\n");
     adc_select_input(axis);
     int raw = adc_read();
+    printf("\nrax axis (%d): %d\n", axis, raw);
 
     int scaled_val = ((raw - 2047) / 8);
 
@@ -109,7 +106,7 @@ void hc06_task(void *p) {
     uart_init(HC06_UART_ID, HC06_BAUD_RATE);
     gpio_set_function(HC06_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(HC06_RX_PIN, GPIO_FUNC_UART);
-    hc06_init("aps2_legal", "1234");
+    hc06_init("bruno-stanz", "1234");
 
     while (true) {
         uart_puts(HC06_UART_ID, "OLAAA ");
@@ -186,26 +183,28 @@ void game_btn_task(void *p) {
 }
 
 void x_task(void *p) {
-    adc_gpio_init(0);
+    adc_gpio_init(26);
     adc_t data;
     data.axis = 6;
 
     while (1) {
-        int val = read_and_filter_adc(0);
-        data.val = val;
+        int val = adc_read();
+        int mapped_val   = (data.val - 2047) * 255 / 2047;
+        data.val = (int) mapped_val * 0.5;
         xQueueSend(xQueueJoyStick, &data, portMAX_DELAY);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
 void y_task(void *p) {
-    adc_gpio_init(1);
+    adc_gpio_init(27);
     adc_t data;
     data.axis = 7;
 
     while (1) {
-        int val = read_and_filter_adc(1);
-        data.val = val;
+        int val = adc_read();
+        int mapped_val   = (data.val - 2047) * 255 / 2047;
+        data.val = (int) mapped_val * 0.5;
         xQueueSend(xQueueJoyStick, &data, portMAX_DELAY);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
@@ -225,6 +224,7 @@ void joystick_task(void *p) {
 /* ------------------------------ Main ------------------------------ */
 int main() {
     stdio_init_all();
+    adc_init();
 
     // Semaphores
 
