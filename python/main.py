@@ -17,6 +17,15 @@ class VJoyController:
             8: ('axis', pyvjoy.HID_USAGE_X),  # MJX (left stick x-axis)
             9: ('axis', pyvjoy.HID_USAGE_Y)   # MJY (left stick y-axis)
         }
+    
+    def reset_buttons(self):
+        for i in range(self.gamepad.get_number_of_buttons()):
+            self.gamepad.set_button(i, False)
+    
+    def reset_axes(self):
+        neutral = 16384
+        for ax in [pyvjoy.HID_USAGE_X, pyvjoy.HID_USAGE_Y, pyvjoy.HID_USAGE_RX, pyvjoy.HID_USAGE_RY]:
+            self.gamepad.set_axis(ax, neutral)
 
     def process_input(self, idx, value):
         if idx not in self.mapping:
@@ -27,9 +36,11 @@ class VJoyController:
         if action_type == 'button':
             if value not in [0, 1]:
                 raise ValueError("button value must be 0 or 1")
+            self.reset_buttons()
             self.gamepad.set_button(action_index + 1, value != 0)
         elif action_type == 'axis':
-            scaled_value = int(value * 32767 / 1000 + 32768)
+            self.reset_axes()
+            scaled_value = int((32767 / 510) * value + 1)
             self.gamepad.set_axis(action_index, scaled_value)
 
 
@@ -47,7 +58,7 @@ class BluetoothReceiver:
 def parse_data(data):
     idx = data[0]
     value = int.from_bytes(data[1:3], byteorder='big', signed=True)
-    print("received data: IDX={}, VALUE={}".format(idx, value))
+    print("received data: IDX = {}, VALUE = {}".format(idx, value))
     return idx, value
 
 
@@ -63,7 +74,7 @@ def main():
             controller.process_input(idx, value)
 
     except KeyboardInterrupt:
-        print("program terminated by user. exiting...")
+        print("\nprogram terminated by user. exiting...")
     except Exception as e:
         print("error occurred: ", e)
     finally:
