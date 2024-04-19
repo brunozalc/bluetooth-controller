@@ -34,7 +34,7 @@ class VJoyController:
 
 
 class BluetoothReceiver:
-    def __init__(self, com_port='COM3', baud_rate=9600):
+    def __init__(self, com_port='/dev/rfcomm0', baud_rate=9600):
         self.serial = serial.Serial(com_port, baud_rate)
 
     def read_data(self):
@@ -46,7 +46,7 @@ class BluetoothReceiver:
 
 def parse_data(data):
     idx = data[0]
-    value = int.from_bytes(data[1:3], byteorder='little', signed=True)
+    value = int.from_bytes(data[1:3], byteorder='big', signed=True)
     print("received data: IDX={}, VALUE={}".format(idx, value))
     return idx, value
 
