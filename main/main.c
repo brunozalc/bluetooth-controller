@@ -33,6 +33,8 @@ MJS Y  - 9 */
 #define GAME_BTN_Y_PIN 11
 #define GAME_BTN_X_PIN 12
 #define GAME_BTN_A_PIN 13
+#define R_TRIGGER_PIN 14 // a mudar
+#define L_TRIGGER_PIN 15 // a mudar
 
 #define DEAD_ZONE 180
 
@@ -49,20 +51,6 @@ QueueHandle_t xQueueGameButton, xQueueJoyStick, xQueueBluetooth;
 bool has_debounced(uint32_t current_trigger, uint32_t last_trigger) {
     return current_trigger - last_trigger > DEBOUNCE_TIME;
 }
-
-// int read_and_filter_adc(int axis) {
-//     adc_select_input(axis);
-//     int raw = adc_read();
-//     printf("\nrax axis (%d): %d\n", axis, raw);
-
-//     int scaled_val = ((raw - 2047) / 8);
-
-//     if (abs(scaled_val) < DEAD_ZONE) {
-//         scaled_val = 0; // Apply deadzone
-//     }
-
-//     return scaled_val;
-// }
 
 void write_package(adc_t data) {
     int val = data.val;
@@ -88,6 +76,10 @@ void game_btn_callback(uint gpio, uint32_t events) {
             pressed = 2;
         else if (gpio == GAME_BTN_A_PIN)
             pressed = 3;
+        else if (gpio == R_TRIGGER_PIN)
+            pressed = 4;
+        else if (gpio == L_TRIGGER_PIN)
+            pressed = 5;
     }
 
     xQueueSendFromISR(xQueueGameButton, &pressed, 0);
@@ -127,17 +119,29 @@ void game_btn_task(void *p) {
     gpio_set_dir(GAME_BTN_A_PIN, GPIO_IN);
     gpio_pull_up(GAME_BTN_A_PIN);
 
+    gpio_init(R_TRIGGER_PIN);
+    gpio_set_dir(R_TRIGGER_PIN, GPIO_IN);
+    gpio_pull_up(R_TRIGGER_PIN);
+
+    gpio_init(L_TRIGGER_PIN);
+    gpio_set_dir(L_TRIGGER_PIN, GPIO_IN);
+    gpio_pull_up(L_TRIGGER_PIN);
+
     gpio_set_irq_enabled_with_callback(GAME_BTN_B_PIN,
                                        GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE,
                                        true, &game_btn_callback);
     gpio_set_irq_enabled(GAME_BTN_Y_PIN, GPIO_IRQ_EDGE_FALL, true);
     gpio_set_irq_enabled(GAME_BTN_X_PIN, GPIO_IRQ_EDGE_FALL, true);
     gpio_set_irq_enabled(GAME_BTN_A_PIN, GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled(R_TRIGGER_PIN, GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled(L_TRIGGER_PIN, GPIO_IRQ_EDGE_FALL, true);
 
     uint32_t b_btn_last_trigger = 0;
     uint32_t y_btn_last_trigger = 0;
     uint32_t x_btn_last_trigger = 0;
     uint32_t a_btn_last_trigger = 0;
+    uint32_t tr_btn_last_trigger = 0;
+    uint32_t tl_btn_last_trigger = 0;
 
     uint pressed_button = 0;
     uint32_t trigger_time;
@@ -171,6 +175,20 @@ void game_btn_task(void *p) {
             else if (pressed_button == 3 && has_debounced(trigger_time, a_btn_last_trigger)) {
                 a_btn_last_trigger = trigger_time;
                 data.axis = 3;
+                data.val = 1;
+                write_package(data);
+            }
+
+            else if (pressed_button == 4 && has_debounced(trigger_time, tr_btn_last_trigger)) {
+                tr_btn_last_trigger = trigger_time;
+                data.axis = 4;
+                data.val = 1;
+                write_package(data);
+            }
+
+            else if (pressed_button == 5 && has_debounced(trigger_time, tl_btn_last_trigger)) {
+                tl_btn_last_trigger = trigger_time;
+                data.axis = 5;
                 data.val = 1;
                 write_package(data);
             }
