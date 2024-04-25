@@ -36,6 +36,12 @@ MJS Y  - 9 */
 #define R_TRIGGER_PIN 14 // a mudar
 #define L_TRIGGER_PIN 15 // a mudar
 
+#define R_JOYSTICK_SW_PIN 21 // a mudar
+#define L_JOYSTICK_SW_PIN 20 // a mudar
+
+#define MUX_A_CONTROL_PIN 16
+#define MUX_ADC_PIN 28
+
 #define DEAD_ZONE 180
 
 /* ------------------------------ Data structures ------------------------------ */
@@ -45,7 +51,7 @@ typedef struct adc {
 } adc_t;
 
 /* ------------------------------ Global variables ------------------------------ */
-QueueHandle_t xQueueGameButton, xQueueJoyStick, xQueueBluetooth;
+QueueHandle_t xQueueGameButton, xQueueJoyStick, xQueueBluetooth, xQueueJoyStickLeft;
 
 /* ------------------------------ Utilities ------------------------------ */
 bool has_debounced(uint32_t current_trigger, uint32_t last_trigger) {
@@ -80,6 +86,10 @@ void game_btn_callback(uint gpio, uint32_t events) {
             pressed = 4;
         else if (gpio == L_TRIGGER_PIN)
             pressed = 5;
+        else if (gpio == R_JOYSTICK_SW_PIN)
+            pressed = 6;
+        else if (gpio == L_JOYSTICK_SW_PIN)
+            pressed = 7;
     }
 
     xQueueSendFromISR(xQueueGameButton, &pressed, 0);
@@ -127,6 +137,14 @@ void game_btn_task(void *p) {
     gpio_set_dir(L_TRIGGER_PIN, GPIO_IN);
     gpio_pull_up(L_TRIGGER_PIN);
 
+    gpio_init(L_JOYSTICK_SW_PIN);
+    gpio_set_dir(L_JOYSTICK_SW_PIN, GPIO_IN);
+    gpio_pull_up(L_JOYSTICK_SW_PIN);
+
+    gpio_init(R_JOYSTICK_SW_PIN);
+    gpio_set_dir(R_JOYSTICK_SW_PIN, GPIO_IN);
+    gpio_pull_up(R_JOYSTICK_SW_PIN);
+
     gpio_set_irq_enabled_with_callback(GAME_BTN_B_PIN,
                                        GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE,
                                        true, &game_btn_callback);
@@ -135,6 +153,8 @@ void game_btn_task(void *p) {
     gpio_set_irq_enabled(GAME_BTN_A_PIN, GPIO_IRQ_EDGE_FALL, true);
     gpio_set_irq_enabled(R_TRIGGER_PIN, GPIO_IRQ_EDGE_FALL, true);
     gpio_set_irq_enabled(L_TRIGGER_PIN, GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled(L_JOYSTICK_SW_PIN, GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled(R_JOYSTICK_SW_PIN, GPIO_IRQ_EDGE_FALL, true);
 
     uint32_t b_btn_last_trigger = 0;
     uint32_t y_btn_last_trigger = 0;
@@ -142,6 +162,8 @@ void game_btn_task(void *p) {
     uint32_t a_btn_last_trigger = 0;
     uint32_t tr_btn_last_trigger = 0;
     uint32_t tl_btn_last_trigger = 0;
+    uint32_t r_joysw_last_trigger = 0;
+    uint32_t l_joysw_last_trigger = 0;
 
     uint pressed_button = 0;
     uint32_t trigger_time;
@@ -192,6 +214,20 @@ void game_btn_task(void *p) {
                 data.val = 1;
                 write_package(data);
             }
+
+            else if (pressed_button == 6 && has_debounced(trigger_time, r_joysw_last_trigger)) {
+                r_joysw_last_trigger = trigger_time;
+                data.axis = 10;
+                data.val = 1;
+                write_package(data);
+            }
+
+            else if (pressed_button == 7 && has_debounced(trigger_time, l_joysw_last_trigger)) {
+                l_joysw_last_trigger = trigger_time;
+                data.axis = 11;
+                data.val = 1;
+                write_package(data);
+            }
         }
     }
 }
@@ -205,10 +241,11 @@ void x_task(void *p) {
 
     while (1) {
         data.axis = 6;
+        adc_select_input(0);
         data.val = adc_read();
 
         int mapped_val = (data.val - 2047) * 255 / 2047;
-        data.val = (int)(mapped_val);
+        data.val = (int)(-mapped_val);
 
         xQueueSend(xQueueJoyStick, &data, portMAX_DELAY);
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -224,10 +261,11 @@ void y_task(void *p) {
 
     while (1) {
         data.axis = 7;
+        adc_select_input(1);
         data.val = adc_read();
 
         int mapped_val = (data.val - 2047) * 255 / 2047;
-        data.val = (int)(mapped_val);
+        data.val = (int)(-mapped_val);
 
         xQueueSend(xQueueJoyStick, &data, portMAX_DELAY);
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -246,6 +284,53 @@ void joystick_task(void *p) {
         }
     }
 }
+
+
+void mux_task(void *p) {
+    adc_init();
+    adc_gpio_init(MUX_ADC_PIN);
+    adc_set_round_robin(0b00011);
+
+    gpio_init(MUX_A_CONTROL_PIN);
+    gpio_set_dir(MUX_A_CONTROL_PIN, GPIO_OUT);
+
+    adc_t data;
+    bool get_x = true;
+    while (1) {
+        if (get_x) {
+            data.axis = 8;
+            gpio_put(MUX_A_CONTROL_PIN, 0);
+        } else {
+            data.axis = 9;
+            gpio_put(MUX_A_CONTROL_PIN, 1);
+        }
+
+        adc_select_input(2);
+        data.val = adc_read();
+        int mapped_val = (data.val - 2047) * 255 / 2047;
+        data.val = (int)(-mapped_val);
+
+        xQueueSend(xQueueJoyStickLeft, &data, portMAX_DELAY);
+        vTaskDelay(pdMS_TO_TICKS(50));
+
+        get_x = get_x ? false : true;
+    }
+}
+
+
+void left_joystick_task(void *p) {
+    adc_t data;
+
+    while (1) {
+        if (xQueueReceive(xQueueJoyStickLeft, &data, portMAX_DELAY)) {
+            if (data.val > -42 && data.val < 42) {
+                data.val = 0;
+            }
+            xQueueSend(xQueueBluetooth, &data, portMAX_DELAY);
+        }
+    }
+}
+
 
 /* ------------------------------ Main ------------------------------ */
 int main() {
@@ -270,12 +355,20 @@ int main() {
         printf("Falha em criar a fila xQueueBluetooth... \n");
     }
 
+    xQueueJoyStickLeft = xQueueCreate(32, sizeof(adc_t));
+    if (xQueueJoyStickLeft == NULL) {
+        printf("Falha em criar a fila xQueueJoyStickLeft... \n");
+    }
+
     // Tasks
     xTaskCreate(hc06_task, "HC06 Task", 4096, NULL, 1, NULL);
     xTaskCreate(game_btn_task, "GameButton Task", 4096, NULL, 1, NULL);
     xTaskCreate(joystick_task, "JoyStick Task", 4096, NULL, 1, NULL);
     xTaskCreate(x_task, "x_task", 4096, NULL, 1, NULL);
     xTaskCreate(y_task, "y_task", 4096, NULL, 1, NULL);
+    xTaskCreate(left_joystick_task, "left_joystick_task", 4096, NULL, 1, NULL);
+    xTaskCreate(mux_task, "mux_task", 4096, NULL, 1, NULL);
+
 
     vTaskStartScheduler();
     while (true)
