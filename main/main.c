@@ -13,6 +13,7 @@
 
 #include "hc06.h"
 #include "pico/stdlib.h"
+#include "ssd1306.h"
 
 /* List of IDs
 B      - 0
@@ -285,7 +286,6 @@ void joystick_task(void *p) {
     }
 }
 
-
 void mux_task(void *p) {
     adc_init();
     adc_gpio_init(MUX_ADC_PIN);
@@ -317,7 +317,6 @@ void mux_task(void *p) {
     }
 }
 
-
 void left_joystick_task(void *p) {
     adc_t data;
 
@@ -331,6 +330,57 @@ void left_joystick_task(void *p) {
     }
 }
 
+void task_oled(void *p) {
+    SSD1306_init();
+
+    uint8_t buf[SSD1306_BUF_LEN];
+    memset(buf, 0, SSD1306_BUF_LEN); //  clear buffer
+
+    struct render_area area = {
+        .start_col = 0,
+        .end_col = SSD1306_WIDTH - 1,
+        .start_page = 0,
+        .end_page = SSD1306_NUM_PAGES - 1,
+    };
+
+    calc_render_area_buflen(&area); // calculate the buffer length based on the display area (128 x 32 pixels)
+
+    char *frames[] = {
+        "Now playing",
+        "Now playing.",
+        "Now playing..",
+        "Now playing..."};
+
+    const int num_frames = sizeof(frames) / sizeof(frames[0]);
+
+    int current_frame = 0;
+    int next_frame_cnt = 0; // this will just be a counter to change the frame every 5 iterations (500ms)
+
+    while (1) {
+        memset(buf, 0, SSD1306_BUF_LEN); // clear buffer
+
+        WriteString(buf, 0, 0, frames[current_frame]); // write the current text/frame on the buffer
+
+        // music visualizer
+        for (int i = 0; i < SSD1306_WIDTH; i += 4) { // bar width
+            int height = rand() % 12;                // random bar height
+            for (int j = 0; j < height; j++) {
+                SetPixel(buf, i, 31 - j, true); // draw bar from bottom to top on buffer
+            }
+        }
+
+        // render the buffer to the OLED
+        render(buf, &area);
+
+        if (next_frame_cnt >= 5) {
+            current_frame = (current_frame + 1) % num_frames;
+            next_frame_cnt = 0;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+        next_frame_cnt += 1;
+    }
+}
 
 /* ------------------------------ Main ------------------------------ */
 int main() {
@@ -368,7 +418,7 @@ int main() {
     xTaskCreate(y_task, "y_task", 4096, NULL, 1, NULL);
     xTaskCreate(left_joystick_task, "left_joystick_task", 4096, NULL, 1, NULL);
     xTaskCreate(mux_task, "mux_task", 4096, NULL, 1, NULL);
-
+    xTaskCreate(task_oled, "OLED Task", 4096, NULL, 1, NULL);
 
     vTaskStartScheduler();
     while (true)
