@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#pragma once
+#ifndef SSD1306_H
+#define SSD1306_H
 
 #include "hardware/i2c.h"
 #include "pico/binary_info.h"
@@ -107,14 +108,25 @@ void SSD1306_scroll(bool on);
 
 void render(uint8_t *buf, struct render_area *area);
 
-static void SetPixel(uint8_t *buf, int x, int y, bool on);
+void SetPixel(uint8_t *buf, int x, int y, bool on);
 
-static inline int GetFontIndex(uint8_t ch);
+static inline int GetFontIndex(uint8_t ch) {
+    if (ch >= 'A' && ch <= 'Z') {
+        return ch - 'A' + 1;
+    } else if (ch >= '0' && ch <= '9') {
+        return ch - '0' + 27;
+    } else if (ch == '.') {
+        return 37;
+    } else
+        return 0; // Not got that char so space.
+}
 
-static uint8_t reverse(uint8_t b);
+uint8_t reverse(uint8_t b);
 
-static void FillReversedCache();
+void FillReversedCache();
 
-static void WriteChar(uint8_t *buf, int16_t x, int16_t y, uint8_t ch);
+void WriteChar(uint8_t *buf, int16_t x, int16_t y, uint8_t ch);
 
-static void WriteString(uint8_t *buf, int16_t x, int16_t y, char *str);
+void WriteString(uint8_t *buf, int16_t x, int16_t y, char *str);
+
+#endif // SSD1306_H

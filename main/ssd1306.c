@@ -120,7 +120,7 @@ void render(uint8_t *buf, struct render_area *area) {
     SSD1306_send_buf(buf, area->buflen);
 }
 
-static void SetPixel(uint8_t *buf, int x, int y, bool on) {
+void SetPixel(uint8_t *buf, int x, int y, bool on) {
     assert(x >= 0 && x < SSD1306_WIDTH && y >= 0 && y < SSD1306_HEIGHT);
 
     // The calculation to determine the correct bit to set depends on which address
@@ -146,33 +146,22 @@ static void SetPixel(uint8_t *buf, int x, int y, bool on) {
     buf[byte_idx] = byte;
 }
 
-static inline int GetFontIndex(uint8_t ch) {
-    if (ch >= 'A' && ch <= 'Z') {
-        return ch - 'A' + 1;
-    } else if (ch >= '0' && ch <= '9') {
-        return ch - '0' + 27;
-    } else if (ch == '.') {
-        return 37;
-    } else
-        return 0; // Not got that char so space.
-}
+uint8_t reversed[sizeof(font)] = {0};
 
-static uint8_t reversed[sizeof(font)] = {0};
-
-static uint8_t reverse(uint8_t b) {
+uint8_t reverse(uint8_t b) {
     b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
     b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
     b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
     return b;
 }
 
-static void FillReversedCache() {
+void FillReversedCache() {
     // calculate and cache a reversed version of fhe font, because I defined it upside down...doh!
     for (int i = 0; i < sizeof(font); i++)
         reversed[i] = reverse(font[i]);
 }
 
-static void WriteChar(uint8_t *buf, int16_t x, int16_t y, uint8_t ch) {
+void WriteChar(uint8_t *buf, int16_t x, int16_t y, uint8_t ch) {
     if (reversed[0] == 0)
         FillReversedCache();
 
@@ -191,7 +180,7 @@ static void WriteChar(uint8_t *buf, int16_t x, int16_t y, uint8_t ch) {
     }
 }
 
-static void WriteString(uint8_t *buf, int16_t x, int16_t y, char *str) {
+void WriteString(uint8_t *buf, int16_t x, int16_t y, char *str) {
     // Cull out any string off the screen
     if (x > SSD1306_WIDTH - 8 || y > SSD1306_HEIGHT - 8)
         return;
