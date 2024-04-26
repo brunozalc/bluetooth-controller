@@ -1,8 +1,9 @@
 import pyvjoy
 import serial
-import time
+import threading
 
 
+## ----------------- vjoy controller ----------------- ##
 class VJoyController:
     def __init__(self, device_id=1):
         self.gamepad = pyvjoy.VJoyDevice(device_id)
@@ -21,13 +22,8 @@ class VJoyController:
             11: ('button', 7),  # SWL (left joystick switch)
         }
 
-    def reset_buttons(self):
-        for i in range(1, 9):
-            self.gamepad.set_button(i, False)
-
-    # def reset_axis(self, axis):
-    #     neutral = 16384
-    #     self.gamepad.set_axis(axis, neutral)
+        self.release_delays = {}
+        self.button_release_delay = 0.1  # seconds
 
     def process_input(self, idx, value):
         if idx not in self.mapping:
@@ -38,31 +34,47 @@ class VJoyController:
         if action_type == 'button':
             if value not in [0, 1]:
                 raise ValueError("button value must be 0 or 1")
-            self.reset_buttons()
-            self.gamepad.set_button(action_index + 1, value != 0)
+            
+            self.gamepad.set_button(action_index, value != 0)
+            if value == 1:
+                if action_index in self.release_delays:
+                    self.release_delays[action_index].cancel() 
+                timer = threading.Timer(self.button_release_delay, self.reset_button, [action_index])
+                timer.start()
+                self.release_delays[action_index] = timer
+
         elif action_type == 'axis':
             scaled_value = int((32767 / 510) * (value + 255))
             self.gamepad.set_axis(action_index, scaled_value)
-            time.sleep(0.05)
-            # self.reset_axis(action_index)
+    
+    def reset_button(self, button_id):
+        self.gamepad.set_button(button_id, False)
 
 
+## ----------------- bluetooth receiver ----------------- ##
 class BluetoothReceiver:
     def __init__(self, com_port='COM5', baud_rate=9600):
         self.serial = serial.Serial(com_port, baud_rate)
 
     def read_data(self):
-        data = self.serial.read(4)
-        if data[-1] != 255:
-            raise ValueError("invalid packet end")
-        return data[:3]
+        buffer = b''
+        while len(buffer) < 4:
+            buffer += self.serial.read(4 - len(buffer))
+            if buffer[-1] == 255:
+                if len(buffer) == 4:
+                    return buffer[:3]
+                else:
+                    buffer = b''  # reset buffer if packet end misaligned
+            elif len(buffer) > 4:
+                raise ValueError("packet length exceeded")
+        raise ValueError("invalid packet end")
 
 
+## ----------------- main program ----------------- ##
 def parse_data(data):
     idx = data[0]
     value = int.from_bytes(data[1:3], byteorder='big', signed=True)
-    if (idx < 6 or idx > 9):
-        print("received data: IDX = {}, VALUE = {}".format(idx, value))
+    print("received data: IDX = {}, VALUE = {}".format(idx, value))
     return idx, value
 
 
@@ -70,42 +82,22 @@ def main():
     receiver = BluetoothReceiver()
     controller = VJoyController()
 
-    # simulated_data = [
-    #     (0, 1),  # B
-    #     (1, 1),  # Y
-    #     (2, 1),  # X
-    #     (3, 1),  # A
-    #     (4, 1),  # TR
-    #     (5, 1),  # TL
-    #     (6, 255),  # CJX
-    #     (6, -255),
-    #     (6, 0),
-    #     (7, 255),  # CJY
-    #     (7, -255),
-    #     (7, 0),
-    #     (8, 255),  # MJX
-    #     (8, -255),
-    #     (9, 255),  # MJY
-    #     (9, -255),
-    #     (10, 1),  # SWR
-    #     (11, 1)  # SWL
-    # ]
-
     try:
-        print("controller initialized")
         while True:
-            # print("waiting for controller input...")
-            data = receiver.read_data()
-            idx, value = parse_data(data)
-            controller.process_input(idx, value)
+            try:
+                data = receiver.read_data()
+                idx, value = parse_data(data)
+                controller.process_input(idx, value)
+            except Exception as e:
+                print(f"\nnon-fatal error occurred: {e}\n")
 
-    except KeyboardInterrupt:
-        print("\nprogram terminated by user. exiting...")
     except Exception as e:
-        print("error occurred: ", e)
+        print(f"\nerror occurred: {e}\n")            
+    except KeyboardInterrupt:
+        print("\nprogram terminated by user. exiting...\n")
     finally:
         receiver.serial.close()
-
+        
 
 if __name__ == "__main__":
     main()
