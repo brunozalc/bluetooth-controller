@@ -51,6 +51,11 @@ typedef struct adc {
     int val;
 } adc_t;
 
+typedef struct {
+    int last_val_x; // last value sent for x-axis
+    int last_val_y; // last value sent for y-axis
+} joystick_state_t;
+
 /* ------------------------------ Global variables ------------------------------ */
 QueueHandle_t xQueueGameButton, xQueueJoyStick, xQueueBluetooth, xQueueJoyStickLeft;
 
@@ -271,20 +276,30 @@ void y_task(void *p) {
 
 void joystick_task(void *p) {
     adc_t data;
-    static int last_value = 0; // keep track of the last sent joystick value
+
+    joystick_state_t right_joystick_state = {0, 0};
 
     while (1) {
         if (xQueueReceive(xQueueJoyStick, &data, pdMS_TO_TICKS(10))) {
+            int *last_value;
+            if (data.axis == 6) { // right joystick X-axis
+                last_value = &right_joystick_state.last_val_x;
+            } else if (data.axis == 7) { // right joystick Y-axis
+                last_value = &right_joystick_state.last_val_y;
+            } else {
+                continue; // ignore invalid axis data
+            }
+
             if (abs(data.val) > 30) {
-                if (data.val != last_value) { // only send if value has changed
+                if (data.val != *last_value) {
                     xQueueSend(xQueueBluetooth, &data, pdMS_TO_TICKS(10));
-                    last_value = data.val; // update last sent value
+                    *last_value = data.val;
                 }
             } else {
                 data.val = 0;
-                if (last_value != 0) { // only send zero once when movement stops
+                if (*last_value != 0) {
                     xQueueSend(xQueueBluetooth, &data, pdMS_TO_TICKS(10));
-                    last_value = 0; // update last sent value
+                    *last_value = 0;
                 }
             }
         }
@@ -324,20 +339,30 @@ void mux_task(void *p) {
 
 void left_joystick_task(void *p) {
     adc_t data;
-    static int last_value = 0; // keep track of the last sent joystick value
+
+    joystick_state_t left_joystick_state = {0, 0};
 
     while (1) {
         if (xQueueReceive(xQueueJoyStickLeft, &data, pdMS_TO_TICKS(10))) {
+            int *last_value;
+            if (data.axis == 8) { // left joystick X-axis
+                last_value = &left_joystick_state.last_val_x;
+            } else if (data.axis == 9) { // left joystick Y-axis
+                last_value = &left_joystick_state.last_val_y;
+            } else {
+                continue; // ignore invalid axis data
+            }
+
             if (abs(data.val) > 42) {
-                if (data.val != last_value) { // only send if value has changed
+                if (data.val != *last_value) {
                     xQueueSend(xQueueBluetooth, &data, pdMS_TO_TICKS(10));
-                    last_value = data.val; // update last sent value
+                    *last_value = data.val;
                 }
             } else {
                 data.val = 0;
-                if (last_value != 0) { // only send zero once when movement stops
+                if (*last_value != 0) {
                     xQueueSend(xQueueBluetooth, &data, pdMS_TO_TICKS(10));
-                    last_value = 0; // update last sent value
+                    *last_value = 0;
                 }
             }
         }
