@@ -60,13 +60,9 @@ bool has_debounced(uint32_t current_trigger, uint32_t last_trigger) {
 }
 
 void write_package(adc_t data) {
-    int val = data.val;
-    int msb = val >> 8;
-    int lsb = val & 0xFF;
-
     uart_putc_raw(HC06_UART_ID, data.axis);
-    uart_putc_raw(HC06_UART_ID, msb);
-    uart_putc_raw(HC06_UART_ID, lsb);
+    uart_putc_raw(HC06_UART_ID, data.val >> 8);
+    uart_putc_raw(HC06_UART_ID, data.val & 0xFF);
     uart_putc_raw(HC06_UART_ID, -1);
 }
 
@@ -107,7 +103,7 @@ void hc06_task(void *p) {
     adc_t data;
 
     while (1) {
-        if (xQueueReceive(xQueueBluetooth, &data, portMAX_DELAY)) {
+        if (xQueueReceive(xQueueBluetooth, &data, pdMS_TO_TICKS(10))) {
             write_package(data);
         }
     }
@@ -172,7 +168,7 @@ void game_btn_task(void *p) {
     adc_t data;
 
     while (true) {
-        if (xQueueReceive(xQueueGameButton, &pressed_button, pdMS_TO_TICKS(100))) {
+        if (xQueueReceive(xQueueGameButton, &pressed_button, pdMS_TO_TICKS(10))) {
             trigger_time = to_ms_since_boot(get_absolute_time());
             if (pressed_button == 0 && has_debounced(trigger_time, b_btn_last_trigger)) {
                 b_btn_last_trigger = trigger_time;
@@ -248,7 +244,7 @@ void x_task(void *p) {
         int mapped_val = (data.val - 2047) * 255 / 2047;
         data.val = (int)(-mapped_val);
 
-        xQueueSend(xQueueJoyStick, &data, portMAX_DELAY);
+        xQueueSend(xQueueJoyStick, &data, pdMS_TO_TICKS(10));
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
@@ -268,20 +264,29 @@ void y_task(void *p) {
         int mapped_val = (data.val - 2047) * 255 / 2047;
         data.val = (int)(-mapped_val);
 
-        xQueueSend(xQueueJoyStick, &data, portMAX_DELAY);
+        xQueueSend(xQueueJoyStick, &data, pdMS_TO_TICKS(10));
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
 void joystick_task(void *p) {
     adc_t data;
+    static int last_value = 0; // keep track of the last sent joystick value
 
     while (1) {
-        if (xQueueReceive(xQueueJoyStick, &data, portMAX_DELAY)) {
-            if (data.val > -30 && data.val < 30) {
+        if (xQueueReceive(xQueueJoyStick, &data, pdMS_TO_TICKS(10))) {
+            if (abs(data.val) > 30) {
+                if (data.val != last_value) { // only send if value has changed
+                    xQueueSend(xQueueBluetooth, &data, pdMS_TO_TICKS(10));
+                    last_value = data.val; // update last sent value
+                }
+            } else {
                 data.val = 0;
+                if (last_value != 0) { // only send zero once when movement stops
+                    xQueueSend(xQueueBluetooth, &data, pdMS_TO_TICKS(10));
+                    last_value = 0; // update last sent value
+                }
             }
-            xQueueSend(xQueueBluetooth, &data, portMAX_DELAY);
         }
     }
 }
@@ -310,8 +315,8 @@ void mux_task(void *p) {
         int mapped_val = (data.val - 2047) * 255 / 2047;
         data.val = (int)(-mapped_val);
 
-        xQueueSend(xQueueJoyStickLeft, &data, portMAX_DELAY);
-        vTaskDelay(pdMS_TO_TICKS(50));
+        xQueueSend(xQueueJoyStickLeft, &data, pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(100));
 
         get_x = get_x ? false : true;
     }
@@ -319,13 +324,22 @@ void mux_task(void *p) {
 
 void left_joystick_task(void *p) {
     adc_t data;
+    static int last_value = 0; // keep track of the last sent joystick value
 
     while (1) {
-        if (xQueueReceive(xQueueJoyStickLeft, &data, portMAX_DELAY)) {
-            if (data.val > -42 && data.val < 42) {
+        if (xQueueReceive(xQueueJoyStickLeft, &data, pdMS_TO_TICKS(10))) {
+            if (abs(data.val) > 42) {
+                if (data.val != last_value) { // only send if value has changed
+                    xQueueSend(xQueueBluetooth, &data, pdMS_TO_TICKS(10));
+                    last_value = data.val; // update last sent value
+                }
+            } else {
                 data.val = 0;
+                if (last_value != 0) { // only send zero once when movement stops
+                    xQueueSend(xQueueBluetooth, &data, pdMS_TO_TICKS(10));
+                    last_value = 0; // update last sent value
+                }
             }
-            xQueueSend(xQueueBluetooth, &data, portMAX_DELAY);
         }
     }
 }
@@ -377,7 +391,7 @@ void task_oled(void *p) {
             next_frame_cnt = 0;
         }
 
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(150));
         next_frame_cnt += 1;
     }
 }
@@ -411,14 +425,16 @@ int main() {
     }
 
     // Tasks
-    xTaskCreate(hc06_task, "HC06 Task", 4096, NULL, 1, NULL);
-    xTaskCreate(game_btn_task, "GameButton Task", 4096, NULL, 1, NULL);
-    xTaskCreate(joystick_task, "JoyStick Task", 4096, NULL, 1, NULL);
-    xTaskCreate(x_task, "x_task", 4096, NULL, 1, NULL);
-    xTaskCreate(y_task, "y_task", 4096, NULL, 1, NULL);
-    xTaskCreate(left_joystick_task, "left_joystick_task", 4096, NULL, 1, NULL);
-    xTaskCreate(mux_task, "mux_task", 4096, NULL, 1, NULL);
-    xTaskCreate(task_oled, "OLED Task", 4096, NULL, 1, NULL);
+    xTaskCreate(game_btn_task, "Button Task", 4096, NULL, 3, NULL);             // maximum priority
+    xTaskCreate(joystick_task, "RJ Processing Task", 4096, NULL, 3, NULL);      // maximum priority
+    xTaskCreate(left_joystick_task, "LJ Processing Task", 4096, NULL, 3, NULL); // maximum priority
+
+    xTaskCreate(hc06_task, "HC06 Task", 4096, NULL, 2, NULL);      // high priority
+    xTaskCreate(x_task, "RJ X-axis Task", 4096, NULL, 2, NULL);    // high priority
+    xTaskCreate(y_task, "RJ Y-axis Task", 4096, NULL, 2, NULL);    // high priority
+    xTaskCreate(mux_task, "LJ XY-axis Task", 4096, NULL, 2, NULL); // high priority
+
+    xTaskCreate(task_oled, "OLED Task", 4096, NULL, 1, NULL); // regular priority
 
     vTaskStartScheduler();
     while (true)
