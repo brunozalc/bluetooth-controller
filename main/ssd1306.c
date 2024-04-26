@@ -146,7 +146,7 @@ void SetPixel(uint8_t *buf, int x, int y, bool on) {
     buf[byte_idx] = byte;
 }
 
-extern inline int GetFontIndex(uint8_t ch) {
+int GetFontIndex(uint8_t ch) {
     if (ch >= 'A' && ch <= 'Z') {
         return ch - 'A' + 1;
     } else if (ch >= '0' && ch <= '9') {
