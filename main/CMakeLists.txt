@@ -1,5 +1,6 @@
 add_executable(main
         hc06.c
+        ssd1306.c
         main.c
 )
 
