@@ -22,12 +22,12 @@ Vovê pode conferir o vídeo de demonstração do controle [aqui](https://www.yo
 
 #### Extras
 
-- [] Possui *haptic feedback*
-- [] Utiliza ADC e IMU
+- [ ] Possui *haptic feedback*
+- [ ] Utiliza ADC e IMU
 - [x] O jogo deve ser "jogável" com o controle (sem latência)
-- [] Controle recebe informações do PC/jogo e faz alguma coisa
-- [] Hardware integrado no controle
+- [ ] Controle recebe informações do PC/jogo e faz alguma coisa
+- [ ] Hardware integrado no controle
 - [x] Utiliza algum componente não visto em aula (display OLED 128x32)
-- [] Botão de macro
+- [ ] Botão de macro
 - [x] Envia com a entrega vídeo TOP/stonks do controle nível quickstarter
 - [x] Organiza código em arquivos `.c` e `.h`
