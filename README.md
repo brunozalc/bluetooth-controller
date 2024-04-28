@@ -1,38 +1,33 @@
-# HC06 examplo
+# APS 2 de Computação Embarcada (24.1)
 
-Conectar HC06 no 5V e gnd, pino TX no `GP5` e pino RX no `GP4`. Também é necessário conectar o pino `STATE` do bluetooth no pino `GP3`.
+## Bruno Zalcberg e Pedro Stanzani de Freitas
 
-O projeto está organizado da seguinte maneira:
+Nessa atividade, fizemos um controle de *videogame* *bluetooth* dedicado ao jogo **Hi-Fi Rush**, desenvolvido pela *Tango Gameworks* e publicado pela *Bethesda*. O jogo acompanha o protagonista Chai, um garoto com o sonho de se tornar um *rockstar*. Ao se fundir com um MP3, Chai ganha poderes musicais e precisa enfrentar diversos inimigos em fases distintas.
 
-- `hc06.h`: Arquivo de headfile com configurações do HC06, tais como pinos, uart, ..
-- `hc06.c`: Arquivo `.c` com implementação das funções auxiliares para configurar o módulo bluetooth
-    - `bool hc06_check_connection();`
-    - `bool hc06_set_name(char name[]);`
-    - `bool hc06_set_pin(char pin[]);`
-    - `bool hc06_set_at_mode(int on);`
-    - `bool hc06_init(char name[], char pin[]);`
+Abaixo você confere o diagrama em blocos referente à construção e funcionamento do controle:
 
-- `main.c` Arquivo principal com inicialização do módulo bluetooth
+inserir imagem
 
-```c
-void hc06_task(void *p) {
-    uart_init(HC06_UART_ID, HC06_BAUD_RATE);
-    gpio_set_function(HC06_TX_PIN, GPIO_FUNC_UART);
-    gpio_set_function(HC06_RX_PIN, GPIO_FUNC_UART);
-    hc06_init("aps2_legal", "1234");
+Vovê pode conferir o vídeo de demonstração do controle [aqui](https://www.youtube.com/watch?v=WvBX_weRk6g).
 
-    while (true) {
-        uart_puts(HC06_UART_ID, "OLAAA ");
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-}
-```
+### Conceitos avaliativos
 
-Extra ao que foi feito em sala de aula, eu adicionei o `hc06_set_at_mode` que força o módulo bluetooth entrar em modo `AT`, caso contrário ele fica 
-conectado no equipamento e não recebe mais comandos.
+#### Básicos
 
-## No linux
+- [x] Desenvolvido para um jogo específico
+- [x] Possui um protótipo mecânico customizado
+- [x] Faz uso de RTOS
+- [x] Utiliza comunicação *bluetooth* e informa se está conectado através de um LED
+- [x] Possui 2x entradas analógicas e 4x entradas digitais
 
-Para conectar o bluetooth no linux usar os passos descritos no site:
+#### Extras
 
-- https://marcqueiroz.wordpress.com/aventuras-com-arduino/configurando-hc-06-bluetooth-module-device-no-ubuntu-12-04/
+- [] Possui *haptic feedback*
+- [] Utiliza ADC e IMU
+- [x] O jogo deve ser "jogável" com o controle (sem latência)
+- [] Controle recebe informações do PC/jogo e faz alguma coisa
+- [] Hardware integrado no controle
+- [x] Utiliza algum componente não visto em aula (display OLED 128x32)
+- [] Botão de macro
+- [x] Envia com a entrega vídeo TOP/stonks do controle nível quickstarter
+- [x] Organiza código em arquivos `.c` e `.h`
