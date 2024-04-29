@@ -6,7 +6,7 @@ Nessa atividade, fizemos um controle de *videogame* *bluetooth* dedicado ao jogo
 
 Abaixo você confere o diagrama em blocos referente à construção e funcionamento do controle:
 
-inserir imagem
+![Firmware diagram.](./docs/firmware-diagram.png)
 
 Vovê pode conferir o vídeo de demonstração do controle [aqui](https://www.youtube.com/watch?v=WvBX_weRk6g).
 
