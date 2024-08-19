@@ -1,6 +1,6 @@
 # Wireless Controller
 
-#### Made with ❤️ by Bruno Zalcberg e Pedro Stanzani de Freitas
+#### Made with ❤️ by Bruno Zalcberg and Pedro Stanzani de Freitas
 
 This is a wireless controller made with RTOS and a Raspberry Pico W. It is dedicated to the Tango Gameworks' game **Hi-Fi Rush**, although it can be used to play many other PC games. 
 
